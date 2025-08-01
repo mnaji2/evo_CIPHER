@@ -1,13 +1,14 @@
 import anndata as ad
 import scanpy as sc
 import numpy as np
+import os
 from sklearn.metrics import r2_score
 import matplotlib.pyplot as plt
 
-def load_data(unperturbed_path, perturb_path):
-    adata_unperturbed = ad.read_h5ad(unperturbed_path)
-    adata_perturb = ad.read_h5ad(perturb_path)
-    return adata_unperturbed, adata_perturb
+def load_data(file_path):
+    if file_path is None:
+        return None
+    return ad.read_h5ad(file_path)
 
 def filter_genes_and_cells(adata, min_mean_expr=1.0, min_cells_per_perturb=100):
     X_matrix = adata.X
@@ -110,23 +111,20 @@ def plot_gene_across_species(gene, species_results):
 
 def main():
 
-    human_unperturbed, human_perturb = load_data('homo_retina.h5ad', 'RPE1_perturb.h5ad')
-    mouse_unperturbed, mouse_perturb = load_data('mus_retina.h5ad', 'RPE1_perturb.h5ad')
-    danio_unperturbed, danio_perturb = load_data('danio_retina.h5ad', 'RPE1_perturb.h5ad')
+    human_unperturbed = load_data('homo_retina.h5ad')
+    human_perturb = load_data('RPE1_perturb.h5ad')
+    mouse_unperturbed = load_data('mus_retina.h5ad')
+    danio_unperturbed = load_data('danio_retina.h5ad')
+
+    for adata in [human_unperturbed, human_perturb, mouse_unperturbed, danio_unperturbed]:
+        normalize_and_log1p(adata)
 
     human_perturb = filter_genes_and_cells(human_perturb)
-    mouse_perturb = filter_genes_and_cells(mouse_perturb)
-    danio_perturb = filter_genes_and_cells(danio_perturb)
 
     human_unperturbed, human_perturb, human_genes = match_genes(human_unperturbed, human_perturb)
-    mouse_unperturbed, mouse_perturb, mouse_genes = match_genes(mouse_unperturbed, mouse_perturb)
-    danio_unperturbed, danio_perturb, danio_genes = match_genes(danio_unperturbed, danio_perturb)
 
-    perturb_genes_human = [g for g in human_perturb.obs['gene'].unique() if g not in ['control', 'non-targeting']]
-    perturb_genes_mouse = [g for g in mouse_perturb.obs['gene'].unique() if g not in ['control', 'non-targeting']]
-    perturb_genes_danio = [g for g in danio_perturb.obs['gene'].unique() if g not in ['control', 'non-targeting']]
-
-    common_perturb_genes = set(perturb_genes_human) & set(perturb_genes_mouse) & set(perturb_genes_danio)
+    mouse_unperturbed = mouse_unperturbed[:, human_genes].copy()
+    danio_unperturbed = danio_unperturbed[:, human_genes].copy()
 
     gene_to_idx_human = {g: i for i, g in enumerate(human_unperturbed.var_names)}
     gene_to_idx_mouse = {g: i for i, g in enumerate(mouse_unperturbed.var_names)}
@@ -136,7 +134,11 @@ def main():
     cov_mouse = calculate_covariance_matrix(mouse_unperturbed)
     cov_danio = calculate_covariance_matrix(danio_unperturbed)
 
-    for gene in common_perturb_genes:
+    perturb_genes = sorted(list(set(human_perturb.obs['gene'].unique()) - {'control', 'non-targeting'}))
+
+    os.makedirs('plots', exist_ok=True)
+
+    for gene in perturb_genes:
         species_results = {}
 
         pred_h = predict_delta_x(cov_human, gene_to_idx_human, gene)
@@ -146,19 +148,14 @@ def main():
             species_results['human'] = (true_h, pred_h, r2_h)
 
         pred_m = predict_delta_x(cov_mouse, gene_to_idx_mouse, gene)
-        true_m = calculate_true_delta_x(mouse_perturb, gene)
-        if len(true_m) == len(pred_m):
-            r2_m = r2_score(true_m, pred_m)
-            species_results['mouse'] = (true_m, pred_m, r2_m)
+        species_results['mouse'] = (np.zeros_like(pred_m), pred_m, 0.0)
 
         pred_d = predict_delta_x(cov_danio, gene_to_idx_danio, gene)
-        true_d = calculate_true_delta_x(danio_perturb, gene)
-        if len(true_d) == len(pred_d):
-            r2_d = r2_score(true_d, pred_d)
-            species_results['danio'] = (true_d, pred_d, r2_d)
+        species_results['danio'] = (np.zeros_like(pred_d), pred_d, 0.0)
 
         plot_gene_across_species(gene, species_results)
-
+        plt.savefig(f"plots/{gene}_cross_species.png")
+        plt.close()
 
 if __name__ == '__main__':
     main()
