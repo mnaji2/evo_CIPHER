@@ -110,9 +110,9 @@ def plot_gene_across_species(gene, species_results):
 
 def main():
 
-    human_unperturbed, human_perturb = load_data('homo_retina.h5ad', 'REP1_perturb.h5ad')
-    mouse_unperturbed, mouse_perturb = load_data('mouse_retina.h5ad', 'REP1_mouse_perturb.h5ad')
-    danio_unperturbed, danio_perturb = load_data('danio_retina.h5ad', 'REP1_danio_perturb.h5ad')
+    human_unperturbed, human_perturb = load_data('homo_retina.h5ad', 'RPE1_perturb.h5ad')
+    mouse_unperturbed, mouse_perturb = load_data('mus_retina.h5ad', 'RPE1_perturb.h5ad')
+    danio_unperturbed, danio_perturb = load_data('danio_retina.h5ad', 'RPE1_perturb.h5ad')
 
     human_perturb = filter_genes_and_cells(human_perturb)
     mouse_perturb = filter_genes_and_cells(mouse_perturb)
